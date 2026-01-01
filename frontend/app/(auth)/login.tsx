@@ -246,8 +246,8 @@ export default function LoginScreen() {
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>परीक्षणको लागि:</Text>
             <Text style={styles.infoText}>
-              युजरनेम: gopalnepal{'\n'}
-              पासवर्ड: comrade123
+              युजरनेम: admin{'\n'}
+              पासवर्ड: zig-ziglar
             </Text>
           </View>
 
