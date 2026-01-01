@@ -16,28 +16,28 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 
-type LoginMethod = 'email' | 'phone';
+type LoginMethod = 'credentials' | 'phone';
 
 export default function LoginScreen() {
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
-  const [email, setEmail] = useState('');
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('credentials');
+  const [identifier, setIdentifier] = useState(''); // email or username
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { loginWithEmail, loginWithOTP } = useAuth();
+  const { login, loginWithOTP } = useAuth();
   const router = useRouter();
 
-  const handleEmailLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('त्रुटि', 'कृपया इमेल र पासवर्ड प्रविष्ट गर्नुहोस्');
+  const handleCredentialsLogin = async () => {
+    if (!identifier || !password) {
+      Alert.alert('त्रुटि', 'कृपया युजरनेम/इमेल र पासवर्ड प्रविष्ट गर्नुहोस्');
       return;
     }
 
     setLoading(true);
     try {
-      await loginWithEmail(email, password);
+      await login(identifier.trim(), password);
       router.replace('/(app)/home');
     } catch (error: any) {
       Alert.alert('लग इन असफल', error.message);
@@ -108,19 +108,19 @@ export default function LoginScreen() {
           {/* Login Method Tabs */}
           <View style={styles.tabContainer}>
             <TouchableOpacity
-              style={[styles.tab, loginMethod === 'email' && styles.activeTab]}
+              style={[styles.tab, loginMethod === 'credentials' && styles.activeTab]}
               onPress={() => {
-                setLoginMethod('email');
+                setLoginMethod('credentials');
                 resetOTPForm();
               }}
             >
               <Ionicons 
-                name="mail" 
+                name="person" 
                 size={20} 
-                color={loginMethod === 'email' ? '#FFFFFF' : '#666'} 
+                color={loginMethod === 'credentials' ? '#FFFFFF' : '#666'} 
               />
-              <Text style={[styles.tabText, loginMethod === 'email' && styles.activeTabText]}>
-                इमेल / पासवर्ड
+              <Text style={[styles.tabText, loginMethod === 'credentials' && styles.activeTabText]}>
+                युजरनेम / इमेल
               </Text>
             </TouchableOpacity>
 
@@ -128,7 +128,7 @@ export default function LoginScreen() {
               style={[styles.tab, loginMethod === 'phone' && styles.activeTab]}
               onPress={() => {
                 setLoginMethod('phone');
-                setEmail('');
+                setIdentifier('');
                 setPassword('');
               }}
             >
@@ -143,23 +143,22 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Email Login Form */}
-          {loginMethod === 'email' && (
+          {/* Username/Email Login Form */}
+          {loginMethod === 'credentials' && (
             <>
               <TextInput
                 style={styles.input}
-                placeholder="इमेल"
+                placeholder="Username or Email"
                 placeholderTextColor="#999"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
+                value={identifier}
+                onChangeText={setIdentifier}
                 autoCapitalize="none"
                 editable={!loading}
               />
 
               <TextInput
                 style={styles.input}
-                placeholder="पासवर्ड"
+                placeholder="Password"
                 placeholderTextColor="#999"
                 value={password}
                 onChangeText={setPassword}
@@ -169,7 +168,7 @@ export default function LoginScreen() {
 
               <TouchableOpacity
                 style={[styles.button, loading && styles.buttonDisabled]}
-                onPress={handleEmailLogin}
+                onPress={handleCredentialsLogin}
                 disabled={loading}
               >
                 {loading ? (
@@ -186,7 +185,7 @@ export default function LoginScreen() {
             <>
               <TextInput
                 style={styles.input}
-                placeholder="फोन नम्बर (१० अंक)"
+                placeholder="Phone Number (10 digits)"
                 placeholderTextColor="#999"
                 value={phone}
                 onChangeText={setPhone}
@@ -211,7 +210,7 @@ export default function LoginScreen() {
                 <>
                   <TextInput
                     style={styles.input}
-                    placeholder="६ अंकको OTP"
+                    placeholder="6-digit OTP"
                     placeholderTextColor="#999"
                     value={otp}
                     onChangeText={setOtp}
@@ -244,11 +243,13 @@ export default function LoginScreen() {
             </>
           )}
 
-          <Text style={styles.infoText}>
-            परीक्षणको लागि:{'\n'}
-            इमेल: admin@annfsu.org{'\n'}
-            पासवर्ड: admin123
-          </Text>
+          <View style={styles.infoBox}>
+            <Text style={styles.infoTitle}>परीक्षणको लागि:</Text>
+            <Text style={styles.infoText}>
+              युजरनेम: gopalnepal{'\n'}
+              पासवर्ड: comrade123
+            </Text>
+          </View>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -384,11 +385,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textDecorationLine: 'underline',
   },
-  infoText: {
+  infoBox: {
     marginTop: 20,
-    textAlign: 'center',
+    padding: 12,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  infoTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#E65100',
+    marginBottom: 4,
+  },
+  infoText: {
+    fontSize: 12,
     color: '#666',
-    fontSize: 11,
     lineHeight: 18,
   },
   divider: {
