@@ -119,7 +119,8 @@ class ANNFSUAPITester:
             self.log_test("Invalid Login", True, "Correctly rejected invalid credentials")
             return True
         else:
-            self.log_test("Invalid Login", False, "Should have rejected invalid credentials")
+            error_msg = f"Expected 401, got {response.status_code if response else 'no response'}"
+            self.log_test("Invalid Login", False, f"Should have rejected invalid credentials: {error_msg}")
             return False
     
     def test_get_me(self):
