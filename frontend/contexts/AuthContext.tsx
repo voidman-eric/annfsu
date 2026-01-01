@@ -7,6 +7,7 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 interface User {
   id: string;
+  username?: string;
   email: string;
   full_name: string;
   phone: string;
@@ -25,6 +26,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  login: (identifier: string, password: string) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   loginWithOTP: (phone: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
