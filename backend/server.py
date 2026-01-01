@@ -269,6 +269,37 @@ def user_to_response(user: dict) -> UserResponse:
 
 # ========== AUTHENTICATION ROUTES ==========
 
+@api_router.post("/auth/signup", response_model=TokenResponse)
+async def signup(user_data: UserCreate):
+    """Public sign-up - creates user with Public role"""
+    # Check if email or phone already exists
+    existing = await db.users.find_one({
+        "$or": [{"email": user_data.email}, {"phone": user_data.phone}]
+    })
+    if existing:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email or phone already registered")
+    
+    user_dict = user_data.dict()
+    user_dict["password"] = hash_password(user_data.password)
+    user_dict["role"] = UserRole.PUBLIC  # Public role for sign-up
+    user_dict["status"] = UserStatus.PENDING  # Pending until they apply for membership
+    user_dict["created_at"] = datetime.utcnow()
+    user_dict["updated_at"] = datetime.utcnow()
+    user_dict["membership_id"] = None
+    user_dict["issue_date"] = None
+    
+    result = await db.users.insert_one(user_dict)
+    user_dict["_id"] = result.inserted_id
+    
+    # Auto-login after sign-up
+    access_token = create_access_token({"sub": str(result.inserted_id)})
+    
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_to_response(user_dict)
+    )
+
 @api_router.post("/auth/login/email", response_model=TokenResponse)
 async def login_with_email(login_data: EmailPasswordLogin):
     """Login with email and password"""
