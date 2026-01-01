@@ -114,7 +114,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="पूरा नाम *"
+            placeholder="Full Name *"
             placeholderTextColor="#999"
             value={formData.full_name}
             onChangeText={(value) => updateField('full_name', value)}
@@ -123,7 +123,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="इमेल *"
+            placeholder="Email *"
             placeholderTextColor="#999"
             value={formData.email}
             onChangeText={(value) => updateField('email', value)}
@@ -134,7 +134,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="पासवर्ड (कम्तिमा ६ अक्षर) *"
+            placeholder="Password (min 6 characters) *"
             placeholderTextColor="#999"
             value={formData.password}
             onChangeText={(value) => updateField('password', value)}
@@ -144,7 +144,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="पासवर्ड पुष्टि गर्नुहोस् *"
+            placeholder="Confirm Password *"
             placeholderTextColor="#999"
             value={formData.confirmPassword}
             onChangeText={(value) => updateField('confirmPassword', value)}
@@ -154,7 +154,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="फोन नम्बर (१० अंक) *"
+            placeholder="Phone Number (10 digits) *"
             placeholderTextColor="#999"
             value={formData.phone}
             onChangeText={(value) => updateField('phone', value)}
@@ -165,7 +165,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="ठेगाना *"
+            placeholder="Address *"
             placeholderTextColor="#999"
             value={formData.address}
             onChangeText={(value) => updateField('address', value)}
@@ -174,8 +174,8 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="शैक्षिक संस्था *"
-            placeholderTextColor="#999"}
+            placeholder="Educational Institution *"
+            placeholderTextColor="#999"
             value={formData.institution}
             onChangeText={(value) => updateField('institution', value)}
             editable={!loading}
