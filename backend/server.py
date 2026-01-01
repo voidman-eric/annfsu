@@ -1228,3 +1228,110 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+@api_router.post("/seed-contacts")
+async def seed_contacts():
+    """Seed contact data from provided list - removes old and adds new"""
+    # Delete all existing contacts
+    await db.contacts.delete_many({})
+    
+    # New contact data
+    contacts = [
+        {
+            "name_ne": "दिपक धामी",
+            "designation_ne": "अध्यक्ष",
+            "phone_number": "9851003885",
+            "email": "deepak.dhami211@gmail.com",
+            "address": "डोटी",
+            "committee": "central",
+            "order": 1,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "ई.विकास श्रेष्ठ",
+            "designation_ne": "उपाध्यक्ष",
+            "phone_number": "9844095966",
+            "email": "Bs2829523@gmail.com",
+            "address": "रामेछाप",
+            "committee": "central",
+            "order": 2,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "अन्जना सिवाकोटी",
+            "designation_ne": "महासचिव",
+            "phone_number": "9844386929",
+            "email": "anjanashiwaakotiannfsu82@gmail.com",
+            "address": "सर्लाही",
+            "committee": "central",
+            "order": 3,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "कमल जोशी",
+            "designation_ne": "उप-महासचिव",
+            "phone_number": "9848878636",
+            "email": "Kamalkoirala4321@gmail.com",
+            "address": "बझाङ",
+            "committee": "central",
+            "order": 4,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "आकाश घर्ती मगर",
+            "designation_ne": "सचिव",
+            "phone_number": "9849483382",
+            "email": "Agmakash2022@gmail.com",
+            "address": "रोल्पा",
+            "committee": "central",
+            "order": 5,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "गोपाल नेपाल",
+            "designation_ne": "सचिव",
+            "phone_number": "9851117172",
+            "email": "gnepal41@gmail.com",
+            "address": "ओखलढुङ्गा",
+            "committee": "central",
+            "order": 6,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "ई.रचना सापकोटा",
+            "designation_ne": "सचिव",
+            "phone_number": "9844440098",
+            "email": "babushameem00@gmail.com",
+            "address": "लमजुङ",
+            "committee": "central",
+            "order": 7,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "समिम बाबु खान",
+            "designation_ne": "सचिव",
+            "phone_number": "9865178967",
+            "email": "rachanasapkota49@gmail.com",
+            "address": "सर्लाही",
+            "committee": "central",
+            "order": 8,
+            "created_at": datetime.utcnow()
+        },
+        {
+            "name_ne": "जित प्रसाद सिटौला",
+            "designation_ne": "निर्वाचन आयोग अध्यक्ष",
+            "phone_number": "9860209437",
+            "email": "sitaulajitprasad@gmail.com",
+            "address": "",
+            "committee": "central",
+            "order": 9,
+            "created_at": datetime.utcnow()
+        }
+    ]
+    
+    result = await db.contacts.insert_many(contacts)
+    
+    return {
+        "message": "Contacts seeded successfully",
+        "count": len(result.inserted_ids)
+    }
