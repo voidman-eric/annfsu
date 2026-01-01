@@ -111,10 +111,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      if (!token) return;
+      
+      const response = await axios.get(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const userData = response.data;
+      await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+      setUser(userData);
+    } catch (error) {
+      console.error('Refresh user error:', error);
+    }
+  };
+
+  const updateUserPhoto = async (base64Image: string, mimeType: string) => {
+    if (!user || !token) throw new Error('Not authenticated');
+    
+    try {
+      // Upload to Supabase Storage
+      const photoUrl = await uploadAvatar(user.id, base64Image, mimeType);
+      
+      // Update backend
+      const response = await axios.put(
+        `${API_URL}/api/profile/update`,
+        { photo: photoUrl },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const updatedUser = response.data;
+      await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    } catch (error: any) {
+      console.error('Update photo error:', error);
+      throw new Error(error.response?.data?.detail || 'Failed to update photo');
+    }
+  };
+
+  const removeUserPhoto = async () => {
+    if (!user || !token) throw new Error('Not authenticated');
+    
+    try {
+      // Delete from Supabase if exists
+      if (user.photo) {
+        await deleteAvatar(user.photo);
+      }
+      
+      // Update backend
+      const response = await axios.put(
+        `${API_URL}/api/profile/update`,
+        { photo: '' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const updatedUser = response.data;
+      await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    } catch (error: any) {
+      console.error('Remove photo error:', error);
+      throw new Error(error.response?.data?.detail || 'Failed to remove photo');
+    }
+  };
+
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   return (
-    <AuthContext.Provider value={{ user, token, loginWithEmail, loginWithOTP, logout, isLoading, isAdmin }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      token, 
+      loginWithEmail, 
+      loginWithOTP, 
+      logout, 
+      updateUserPhoto,
+      removeUserPhoto,
+      refreshUser,
+      isLoading, 
+      isAdmin 
+    }}>
       {children}
     </AuthContext.Provider>
   );
