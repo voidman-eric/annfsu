@@ -1,11 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import MembershipCardView from '../../components/MembershipCardView';
+import Avatar from '../../components/Avatar';
+import ImagePickerModal from '../../components/ImagePickerModal';
 
 export default function ProfileScreen() {
-  const { user } = useAuth();
+  const { user, updateUserPhoto, removeUserPhoto } = useAuth();
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
 
   if (!user) {
     return (
@@ -17,8 +20,45 @@ export default function ProfileScreen() {
 
   const isApproved = user.status === 'approved';
 
+  const handleImageSelected = async (base64: string, mimeType: string) => {
+    try {
+      await updateUserPhoto(base64, mimeType);
+      Alert.alert('सफलता', 'प्रोफाइल फोटो अपडेट भयो!', [{ text: 'ठीक छ' }]);
+    } catch (error: any) {
+      Alert.alert('त्रुटि', error.message || 'फोटो अपडेट गर्न सकिएन', [{ text: 'ठीक छ' }]);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    try {
+      await removeUserPhoto();
+      Alert.alert('सफलता', 'प्रोफाइल फोटो हटाइयो!', [{ text: 'ठीक छ' }]);
+    } catch (error: any) {
+      Alert.alert('त्रुटि', error.message || 'फोटो हटाउन सकिएन', [{ text: 'ठीक छ' }]);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
+      {/* Profile Header with Avatar */}
+      <View style={styles.profileHeader}>
+        <Avatar
+          uri={user.photo}
+          name={user.full_name}
+          size={120}
+          onPress={() => setIsPhotoModalVisible(true)}
+          showEditIcon
+        />
+        <Text style={styles.userName}>{user.full_name}</Text>
+        <Text style={styles.userEmail}>{user.email}</Text>
+        {user.membership_id && (
+          <View style={styles.membershipBadge}>
+            <Ionicons name="card" size={14} color="#fff" />
+            <Text style={styles.membershipId}>{user.membership_id}</Text>
+          </View>
+        )}
+      </View>
+
       {/* Membership Card - Only for Approved Members */}
       {isApproved && user.membership_id ? (
         <View style={styles.cardSection}>
@@ -110,6 +150,15 @@ export default function ProfileScreen() {
           </View>
         </View>
       </View>
+
+      {/* Image Picker Modal */}
+      <ImagePickerModal
+        visible={isPhotoModalVisible}
+        onClose={() => setIsPhotoModalVisible(false)}
+        onImageSelected={handleImageSelected}
+        onRemovePhoto={handleRemovePhoto}
+        hasExistingPhoto={!!user.photo}
+      />
     </ScrollView>
   );
 }
@@ -125,9 +174,9 @@ function getStatusText(status: string): string {
 
 function getStatusStyle(status: string) {
   switch (status) {
-    case 'approved': return { color: '#4CAF50', fontWeight: 'bold' };
-    case 'pending': return { color: '#FF9800', fontWeight: 'bold' };
-    case 'rejected': return { color: '#F44336', fontWeight: 'bold' };
+    case 'approved': return { color: '#4CAF50', fontWeight: 'bold' as const };
+    case 'pending': return { color: '#FF9800', fontWeight: 'bold' as const };
+    case 'rejected': return { color: '#F44336', fontWeight: 'bold' as const };
     default: return {};
   }
 }
@@ -145,6 +194,38 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: '#666',
+  },
+  profileHeader: {
+    backgroundColor: '#DC143C',
+    paddingTop: 30,
+    paddingBottom: 30,
+    alignItems: 'center',
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 16,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  membershipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 12,
+  },
+  membershipId: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   cardSection: {
     marginTop: 16,
