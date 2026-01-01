@@ -24,7 +24,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginWithOTP: (phone: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
   isAdmin: boolean;
@@ -57,9 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const loginWithEmail = async (email: string, password: string) => {
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
+      const response = await axios.post(`${API_URL}/api/auth/login/email`, {
         email,
         password,
       });
@@ -73,6 +74,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userData);
     } catch (error: any) {
       throw new Error(error.response?.data?.detail || 'Login failed');
+    }
+  };
+
+  const loginWithOTP = async (phone: string, otp: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/api/auth/verify-otp`, {
+        phone,
+        otp,
+      });
+
+      const { access_token, user: userData } = response.data;
+      
+      await AsyncStorage.setItem('auth_token', access_token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+      
+      setToken(access_token);
+      setUser(userData);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.detail || 'OTP verification failed');
     }
   };
 
@@ -90,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, isAdmin }}>
+    <AuthContext.Provider value={{ user, token, loginWithEmail, loginWithOTP, logout, isLoading, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );
