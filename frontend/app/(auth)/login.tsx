@@ -5,23 +5,31 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import api from '../../utils/api';
+
+type LoginMethod = 'email' | 'phone';
 
 export default function LoginScreen() {
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { loginWithEmail, loginWithOTP } = useAuth();
   const router = useRouter();
 
-  const handleLogin = async () => {
+  const handleEmailLogin = async () => {
     if (!email || !password) {
       Alert.alert('त्रुटि', 'कृपया इमेल र पासवर्ड प्रविष्ट गर्नुहोस्');
       return;
@@ -29,10 +37,45 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      await login(email, password);
+      await loginWithEmail(email, password);
       router.replace('/(app)/home');
     } catch (error: any) {
-      Alert.alert('लग इन असफल', error.message);
+      Alert.alert('लग इन असफल', error.response?.data?.detail || error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestOTP = async () => {
+    if (!phone || phone.length !== 10) {
+      Alert.alert('त्रुटि', 'कृपया मान्य फोन नम्बर प्रविष्ट गर्नुहोस्');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.post('/api/auth/request-otp', { phone });
+      setOtpSent(true);
+      Alert.alert('सफल', 'OTP तपाईंको फोनमा पठाइएको छ');
+    } catch (error: any) {
+      Alert.alert('त्रुटि', error.response?.data?.detail || 'OTP पठाउन असफल');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otp || otp.length !== 6) {
+      Alert.alert('त्रुटि', 'कृपया 6 अंकको OTP प्रविष्ट गर्नुहोस्');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await loginWithOTP(phone, otp);
+      router.replace('/(app)/home');
+    } catch (error: any) {
+      Alert.alert('त्रुटि', error.response?.data?.detail || 'अवैध OTP');
     } finally {
       setLoading(false);
     }
