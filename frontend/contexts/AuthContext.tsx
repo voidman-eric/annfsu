@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { uploadAvatar, deleteAvatar } from '../utils/supabase';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -27,6 +28,9 @@ interface AuthContextType {
   loginWithEmail: (email: string, password: string) => Promise<void>;
   loginWithOTP: (phone: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUserPhoto: (base64Image: string, mimeType: string) => Promise<void>;
+  removeUserPhoto: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;
   isAdmin: boolean;
 }
