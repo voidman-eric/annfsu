@@ -249,6 +249,20 @@ export default function LoginScreen() {
             इमेल: admin@annfsu.org{'\n'}
             पासवर्ड: admin123
           </Text>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>वा</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.signUpButton}
+            onPress={() => router.push('/(auth)/signup')}
+            disabled={loading}
+          >
+            <Text style={styles.signUpButtonText}>नयाँ खाता बनाउनुहोस्</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
