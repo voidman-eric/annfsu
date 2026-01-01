@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://union-connect.preview.emergentagent.com/api"
+BASE_URL = "https://annfsu-app.preview.emergentagent.com/api"
 ADMIN_EMAIL = "admin@annfsu.org"
 ADMIN_PASSWORD = "admin123"
 
