@@ -553,6 +553,29 @@ async def update_member(member_id: str, update_data: MemberUpdate, admin: dict =
     
     return user_to_response(updated_user)
 
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    address: Optional[str] = None
+    institution: Optional[str] = None
+    committee: Optional[str] = None
+    position: Optional[str] = None
+    phone: Optional[str] = None
+    blood_group: Optional[str] = None
+    photo: Optional[str] = None
+
+@api_router.put("/profile/update", response_model=UserResponse)
+async def update_profile(profile_data: ProfileUpdate, current_user: dict = Depends(get_current_user)):
+    """User updates their own profile"""
+    user_id = str(current_user["_id"])
+    
+    update_dict = {k: v for k, v in profile_data.dict().items() if v is not None}
+    update_dict["updated_at"] = datetime.utcnow()
+    
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_dict})
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    return user_to_response(updated_user)
+
 @api_router.delete("/members/{member_id}")
 async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
     """Delete a member"""
