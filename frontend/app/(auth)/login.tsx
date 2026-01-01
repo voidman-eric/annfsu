@@ -391,4 +391,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 18,
   },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#ddd',
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: '#999',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  signUpButton: {
+    backgroundColor: '#FFFFFF',
+    height: 50,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#DC143C',
+  },
+  signUpButtonText: {
+    color: '#DC143C',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
