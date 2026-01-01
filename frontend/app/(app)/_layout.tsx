@@ -2,6 +2,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Drawer } from 'expo-router/drawer';
 import { Ionicons } from '@expo/vector-icons';
 import CustomDrawerContent from '../../components/CustomDrawerContent';
+import HeaderAvatar from '../../components/HeaderAvatar';
 
 export default function AppLayout() {
   return (
@@ -16,6 +17,7 @@ export default function AppLayout() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          headerRight: () => <HeaderAvatar />,
           drawerActiveTintColor: '#DC143C',
           drawerInactiveTintColor: '#666',
         }}
