@@ -184,7 +184,7 @@ export default function SignUpScreen() {
           <Text style={styles.sectionTitle}>संगठन जानकारी</Text>
 
           <View style={styles.pickerContainer}>
-            <Text style={styles.pickerLabel}>समिति *</Text>
+            <Text style={styles.pickerLabel}>Committee *</Text>
             <View style={styles.pickerButtons}>
               {['central', 'provincial', 'district', 'campus'].map((comm) => (
                 <TouchableOpacity
@@ -200,9 +200,9 @@ export default function SignUpScreen() {
                     styles.pickerButtonText,
                     formData.committee === comm && styles.pickerButtonTextActive
                   ]}>
-                    {comm === 'central' ? 'केन्द्रीय' : 
-                     comm === 'provincial' ? 'प्रादेशिक' : 
-                     comm === 'district' ? 'जिल्ला' : 'क्याम्पस'}
+                    {comm === 'central' ? 'Central' : 
+                     comm === 'provincial' ? 'Provincial' : 
+                     comm === 'district' ? 'District' : 'Campus'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -211,7 +211,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="पद (वैकल्पिक)"
+            placeholder="Position (Optional)"
             placeholderTextColor="#999"
             value={formData.position}
             onChangeText={(value) => updateField('position', value)}
@@ -220,7 +220,7 @@ export default function SignUpScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="रगत समूह (वैकल्पिक)"
+            placeholder="Blood Group (Optional)"
             placeholderTextColor="#999"
             value={formData.blood_group}
             onChangeText={(value) => updateField('blood_group', value)}
