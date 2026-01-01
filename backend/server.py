@@ -3,13 +3,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 import jwt
 import os
 import logging
+import re
 from pathlib import Path
 from bson import ObjectId
 import random
@@ -51,19 +52,41 @@ class UserStatus:
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    DISABLED = "disabled"
 
 # Request Models
 class UserCreate(BaseModel):
+    username: str
     email: EmailStr
     password: str
-    full_name: str
-    phone: str
-    address: str
-    institution: str
-    committee: str
+    full_name: Optional[str] = None
+    phone: Optional[str] = "0000000000"
+    address: Optional[str] = "Not provided"
+    institution: Optional[str] = "Not provided"
+    committee: Optional[str] = "central"
     position: Optional[str] = None
     blood_group: Optional[str] = None
     photo: Optional[str] = None
+    
+    @validator('username')
+    def validate_username(cls, v):
+        if len(v) < 3:
+            raise ValueError('Username must be at least 3 characters')
+        if len(v) > 20:
+            raise ValueError('Username must be at most 20 characters')
+        if not re.match(r'^[a-zA-Z0-9_]+$', v):
+            raise ValueError('Username can only contain letters, numbers, and underscores')
+        return v.lower()
+    
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters')
+        return v
+
+class LoginRequest(BaseModel):
+    identifier: str  # Can be email or username
+    password: str
 
 class EmailPasswordLogin(BaseModel):
     email: EmailStr
@@ -78,6 +101,7 @@ class PhoneOTPVerify(BaseModel):
 
 class UserResponse(BaseModel):
     id: str
+    username: Optional[str] = None
     email: str
     full_name: str
     phone: str
@@ -189,7 +213,6 @@ def generate_otp() -> str:
 async def send_sms(phone: str, message: str):
     """Mock SMS service - replace with actual SMS provider"""
     logger.info(f"SMS to {phone}: {message}")
-    # TODO: Integrate with actual SMS provider (Twilio, etc.)
     return True
 
 def hash_password(password: str) -> str:
@@ -212,6 +235,11 @@ def decode_token(token: str) -> dict:
     except jwt.JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
+def is_email(value: str) -> bool:
+    """Check if the string is an email address"""
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_pattern, value))
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     payload = decode_token(token)
@@ -222,6 +250,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Check if user is disabled
+    if user.get("status") == UserStatus.DISABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+    
     return user
 
 async def require_admin(current_user: dict = Depends(get_current_user)):
@@ -239,8 +272,8 @@ async def log_admin_activity(admin_id: str, admin_name: str, action: str, target
     activity = {
         "admin_id": admin_id,
         "admin_name": admin_name,
-        "action": action,  # create, update, delete, approve, reject
-        "target_type": target_type,  # member, content, song, contact
+        "action": action,
+        "target_type": target_type,
         "target_id": target_id,
         "details": details,
         "timestamp": datetime.utcnow()
@@ -251,6 +284,7 @@ async def log_admin_activity(admin_id: str, admin_name: str, action: str, target
 def user_to_response(user: dict) -> UserResponse:
     return UserResponse(
         id=str(user["_id"]),
+        username=user.get("username"),
         email=user["email"],
         full_name=user["full_name"],
         phone=user["phone"],
@@ -272,17 +306,22 @@ def user_to_response(user: dict) -> UserResponse:
 @api_router.post("/auth/signup", response_model=TokenResponse)
 async def signup(user_data: UserCreate):
     """Public sign-up - creates user with Public role"""
-    # Check if email or phone already exists
-    existing = await db.users.find_one({
-        "$or": [{"email": user_data.email}, {"phone": user_data.phone}]
-    })
-    if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email or phone already registered")
+    # Check if username already exists
+    existing_username = await db.users.find_one({"username": user_data.username.lower()})
+    if existing_username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+    
+    # Check if email already exists
+    existing_email = await db.users.find_one({"email": user_data.email})
+    if existing_email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
     
     user_dict = user_data.dict()
+    user_dict["username"] = user_data.username.lower()
     user_dict["password"] = hash_password(user_data.password)
-    user_dict["role"] = UserRole.PUBLIC  # Public role for sign-up
-    user_dict["status"] = UserStatus.PENDING  # Pending until they apply for membership
+    user_dict["full_name"] = user_data.full_name or user_data.username
+    user_dict["role"] = UserRole.PUBLIC
+    user_dict["status"] = UserStatus.PENDING
     user_dict["created_at"] = datetime.utcnow()
     user_dict["updated_at"] = datetime.utcnow()
     user_dict["membership_id"] = None
@@ -291,7 +330,6 @@ async def signup(user_data: UserCreate):
     result = await db.users.insert_one(user_dict)
     user_dict["_id"] = result.inserted_id
     
-    # Auto-login after sign-up
     access_token = create_access_token({"sub": str(result.inserted_id)})
     
     return TokenResponse(
@@ -300,12 +338,43 @@ async def signup(user_data: UserCreate):
         user=user_to_response(user_dict)
     )
 
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login(login_data: LoginRequest):
+    """Login with email or username"""
+    identifier = login_data.identifier.strip()
+    
+    # Determine if identifier is email or username
+    if is_email(identifier):
+        user = await db.users.find_one({"email": identifier})
+    else:
+        user = await db.users.find_one({"username": identifier.lower()})
+    
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    
+    if not verify_password(login_data.password, user["password"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    
+    # Check if user is disabled
+    if user.get("status") == UserStatus.DISABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+    
+    access_token = create_access_token({"sub": str(user["_id"])})
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_to_response(user)
+    )
+
 @api_router.post("/auth/login/email", response_model=TokenResponse)
 async def login_with_email(login_data: EmailPasswordLogin):
-    """Login with email and password"""
+    """Login with email and password (legacy support)"""
     user = await db.users.find_one({"email": login_data.email})
     if not user or not verify_password(login_data.password, user["password"]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    
+    if user.get("status") == UserStatus.DISABLED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
     
     access_token = create_access_token({"sub": str(user["_id"])})
     return TokenResponse(
@@ -317,16 +386,13 @@ async def login_with_email(login_data: EmailPasswordLogin):
 @api_router.post("/auth/request-otp")
 async def request_otp(otp_request: PhoneOTPRequest):
     """Request OTP for phone login"""
-    # Check if user exists with this phone
     user = await db.users.find_one({"phone": otp_request.phone})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phone number not registered")
     
-    # Generate OTP
     otp = generate_otp()
     expire_at = datetime.utcnow() + timedelta(minutes=OTP_EXPIRE_MINUTES)
     
-    # Store OTP in database
     await db.otp_codes.update_one(
         {"phone": otp_request.phone},
         {
@@ -341,7 +407,6 @@ async def request_otp(otp_request: PhoneOTPRequest):
         upsert=True
     )
     
-    # Send SMS (mock)
     await send_sms(otp_request.phone, f"Your ANNFSU OTP is: {otp}")
     
     return {"message": "OTP sent successfully", "expires_in_minutes": OTP_EXPIRE_MINUTES}
@@ -349,7 +414,6 @@ async def request_otp(otp_request: PhoneOTPRequest):
 @api_router.post("/auth/verify-otp", response_model=TokenResponse)
 async def verify_otp(otp_verify: PhoneOTPVerify):
     """Verify OTP and login"""
-    # Find OTP record
     otp_record = await db.otp_codes.find_one({
         "phone": otp_verify.phone,
         "otp": otp_verify.otp,
@@ -359,22 +423,18 @@ async def verify_otp(otp_verify: PhoneOTPVerify):
     if not otp_record:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid OTP")
     
-    # Check if expired
     if otp_record["expire_at"] < datetime.utcnow():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="OTP expired")
     
-    # Mark OTP as used
     await db.otp_codes.update_one(
         {"_id": otp_record["_id"]},
         {"$set": {"used": True}}
     )
     
-    # Get user
     user = await db.users.find_one({"phone": otp_verify.phone})
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    # Create token
     access_token = create_access_token({"sub": str(user["_id"])})
     return TokenResponse(
         access_token=access_token,
@@ -386,55 +446,218 @@ async def verify_otp(otp_verify: PhoneOTPVerify):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return user_to_response(current_user)
 
+# ========== ADMIN USER MANAGEMENT ROUTES ==========
+
+@api_router.get("/admin/users", response_model=List[UserResponse])
+async def get_all_users(
+    admin: dict = Depends(require_admin),
+    status_filter: Optional[str] = None,
+    role_filter: Optional[str] = None,
+    search: Optional[str] = None
+):
+    """Get all users with optional filters"""
+    query = {}
+    if status_filter:
+        query["status"] = status_filter
+    if role_filter:
+        query["role"] = role_filter
+    if search:
+        query["$or"] = [
+            {"full_name": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
+            {"username": {"$regex": search, "$options": "i"}}
+        ]
+    
+    users = await db.users.find(query).sort("created_at", -1).to_list(1000)
+    return [user_to_response(user) for user in users]
+
+@api_router.put("/admin/users/{user_id}/approve", response_model=UserResponse)
+async def approve_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Approve a pending user"""
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    count = await db.users.count_documents({"status": UserStatus.APPROVED}) + 1
+    membership_id = f"ANNFSU-{count:05d}"
+    
+    update_dict = {
+        "status": UserStatus.APPROVED,
+        "role": UserRole.MEMBER,
+        "membership_id": membership_id,
+        "issue_date": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_dict})
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    await log_admin_activity(
+        str(admin["_id"]),
+        admin["full_name"],
+        "approve",
+        "user",
+        user_id,
+        {"user_name": user["full_name"], "membership_id": membership_id}
+    )
+    
+    return user_to_response(updated_user)
+
+@api_router.put("/admin/users/{user_id}/reject", response_model=UserResponse)
+async def reject_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Reject a pending user"""
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"status": UserStatus.REJECTED, "updated_at": datetime.utcnow()}}
+    )
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    await log_admin_activity(
+        str(admin["_id"]),
+        admin["full_name"],
+        "reject",
+        "user",
+        user_id,
+        {"user_name": user["full_name"]}
+    )
+    
+    return user_to_response(updated_user)
+
+@api_router.put("/admin/users/{user_id}/enable", response_model=UserResponse)
+async def enable_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Enable a disabled user"""
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"status": UserStatus.APPROVED, "updated_at": datetime.utcnow()}}
+    )
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    await log_admin_activity(
+        str(admin["_id"]),
+        admin["full_name"],
+        "enable",
+        "user",
+        user_id,
+        {"user_name": user["full_name"]}
+    )
+    
+    return user_to_response(updated_user)
+
+@api_router.put("/admin/users/{user_id}/disable", response_model=UserResponse)
+async def disable_user(user_id: str, admin: dict = Depends(require_admin)):
+    """Disable a user account"""
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Prevent disabling super admin
+    if user.get("role") == UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot disable Super Admin")
+    
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"status": UserStatus.DISABLED, "updated_at": datetime.utcnow()}}
+    )
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    await log_admin_activity(
+        str(admin["_id"]),
+        admin["full_name"],
+        "disable",
+        "user",
+        user_id,
+        {"user_name": user["full_name"]}
+    )
+    
+    return user_to_response(updated_user)
+
+@api_router.put("/admin/users/{user_id}/role", response_model=UserResponse)
+async def update_user_role(user_id: str, role: str, admin: dict = Depends(require_admin)):
+    """Update user role"""
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    valid_roles = [UserRole.PUBLIC, UserRole.MEMBER, UserRole.ADMIN]
+    if role not in valid_roles:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+    
+    # Only super admin can make someone admin
+    if role == UserRole.ADMIN and admin.get("role") != UserRole.SUPER_ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Super Admin can assign admin role")
+    
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"role": role, "updated_at": datetime.utcnow()}}
+    )
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    await log_admin_activity(
+        str(admin["_id"]),
+        admin["full_name"],
+        "update_role",
+        "user",
+        user_id,
+        {"user_name": user["full_name"], "new_role": role}
+    )
+    
+    return user_to_response(updated_user)
+
 # ========== MEMBER MANAGEMENT ROUTES ==========
 
 @api_router.post("/members", response_model=UserResponse)
 async def create_member(user_data: UserCreate, admin: dict = Depends(require_admin)):
-    """Admin creates a new member - starts as PENDING"""
-    # Check if email or phone already exists
+    """Admin creates a new member"""
     existing = await db.users.find_one({
-        "$or": [{"email": user_data.email}, {"phone": user_data.phone}]
+        "$or": [{"email": user_data.email}, {"username": user_data.username.lower()}]
     })
     if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email or phone already registered")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email or username already registered")
     
     user_dict = user_data.dict()
+    user_dict["username"] = user_data.username.lower()
     user_dict["password"] = hash_password(user_data.password)
+    user_dict["full_name"] = user_data.full_name or user_data.username
     user_dict["role"] = UserRole.MEMBER
-    user_dict["status"] = UserStatus.PENDING  # Always start as pending
+    user_dict["status"] = UserStatus.PENDING
     user_dict["created_at"] = datetime.utcnow()
     user_dict["updated_at"] = datetime.utcnow()
-    user_dict["membership_id"] = None  # Will be generated on approval
+    user_dict["membership_id"] = None
     user_dict["issue_date"] = None
     
     result = await db.users.insert_one(user_dict)
     user_dict["_id"] = result.inserted_id
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
         "create",
         "member",
         str(result.inserted_id),
-        {"member_name": user_data.full_name, "status": "pending"}
+        {"member_name": user_dict["full_name"], "status": "pending"}
     )
     
     return user_to_response(user_dict)
 
 @api_router.post("/membership/apply", response_model=UserResponse)
 async def apply_for_membership(current_user: dict = Depends(get_current_user)):
-    """Public user applies for membership - upgrades to Member role with Pending status"""
+    """Public user applies for membership"""
     user_id = str(current_user["_id"])
     
-    # Check if already a member
     if current_user["role"] == UserRole.MEMBER:
         if current_user["status"] == UserStatus.APPROVED:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already an approved member")
         elif current_user["status"] == UserStatus.PENDING:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Application already submitted")
     
-    # Upgrade from Public to Member (Pending)
     update_dict = {
         "role": UserRole.MEMBER,
         "status": UserStatus.PENDING,
@@ -477,7 +700,6 @@ async def approve_member(member_id: str, admin: dict = Depends(require_admin)):
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     
-    # Generate membership ID
     count = await db.users.count_documents({"status": UserStatus.APPROVED}) + 1
     membership_id = f"ANNFSU-{count:05d}"
     
@@ -491,7 +713,6 @@ async def approve_member(member_id: str, admin: dict = Depends(require_admin)):
     await db.users.update_one({"_id": ObjectId(member_id)}, {"$set": update_dict})
     updated_user = await db.users.find_one({"_id": ObjectId(member_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -516,7 +737,6 @@ async def reject_member(member_id: str, admin: dict = Depends(require_admin)):
     )
     updated_user = await db.users.find_one({"_id": ObjectId(member_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -541,7 +761,6 @@ async def update_member(member_id: str, update_data: MemberUpdate, admin: dict =
     await db.users.update_one({"_id": ObjectId(member_id)}, {"$set": update_dict})
     updated_user = await db.users.find_one({"_id": ObjectId(member_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -585,7 +804,6 @@ async def delete_member(member_id: str, admin: dict = Depends(require_admin)):
     
     result = await db.users.delete_one({"_id": ObjectId(member_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -610,7 +828,6 @@ async def create_content(content_data: ContentCreate, admin: dict = Depends(requ
     result = await db.content.insert_one(content_dict)
     content_dict["_id"] = result.inserted_id
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -662,7 +879,6 @@ async def update_content(content_id: str, content_data: ContentUpdate, admin: di
     await db.content.update_one({"_id": ObjectId(content_id)}, {"$set": update_dict})
     updated_content = await db.content.find_one({"_id": ObjectId(content_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -692,7 +908,6 @@ async def delete_content(content_id: str, admin: dict = Depends(require_admin)):
     
     await db.content.delete_one({"_id": ObjectId(content_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -704,7 +919,7 @@ async def delete_content(content_id: str, admin: dict = Depends(require_admin)):
     
     return {"message": "Content deleted successfully"}
 
-# ========== SONG ROUTES (keeping existing) ==========
+# ========== SONG ROUTES ==========
 
 @api_router.post("/songs", response_model=SongResponse)
 async def create_song(song_data: SongCreate, admin: dict = Depends(require_admin)):
@@ -716,7 +931,6 @@ async def create_song(song_data: SongCreate, admin: dict = Depends(require_admin
     result = await db.songs.insert_one(song_dict)
     song_dict["_id"] = result.inserted_id
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -768,7 +982,6 @@ async def delete_song(song_id: str, admin: dict = Depends(require_admin)):
     
     await db.songs.delete_one({"_id": ObjectId(song_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -791,7 +1004,6 @@ async def create_contact(contact_data: ContactCreate, admin: dict = Depends(requ
     result = await db.contacts.insert_one(contact_dict)
     contact_dict["_id"] = result.inserted_id
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -843,7 +1055,6 @@ async def update_contact(contact_id: str, contact_data: ContactUpdate, admin: di
     await db.contacts.update_one({"_id": ObjectId(contact_id)}, {"$set": update_dict})
     updated_contact = await db.contacts.find_one({"_id": ObjectId(contact_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -872,7 +1083,6 @@ async def delete_contact(contact_id: str, admin: dict = Depends(require_admin)):
     
     await db.contacts.delete_one({"_id": ObjectId(contact_id)})
     
-    # Log activity
     await log_admin_activity(
         str(admin["_id"]),
         admin["full_name"],
@@ -889,7 +1099,7 @@ async def delete_contact(contact_id: str, admin: dict = Depends(require_admin)):
 @api_router.get("/admin/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(admin: dict = Depends(require_admin)):
     """Get dashboard statistics"""
-    total_members = await db.users.count_documents({"role": UserRole.MEMBER})
+    total_members = await db.users.count_documents({"role": {"$in": [UserRole.MEMBER, UserRole.ADMIN, UserRole.SUPER_ADMIN]}})
     pending_requests = await db.users.count_documents({"status": UserStatus.PENDING})
     approved_members = await db.users.count_documents({"status": UserStatus.APPROVED})
     rejected_members = await db.users.count_documents({"status": UserStatus.REJECTED})
@@ -929,16 +1139,23 @@ async def get_admin_activities(admin: dict = Depends(require_admin), limit: int 
 
 @api_router.get("/")
 async def root():
-    return {"message": "ANNFSU API - अखिल नेपाल राष्ट्रिय स्वतन्त्र विद्यार्थी युनियन", "version": "2.0"}
+    return {"message": "ANNFSU API - अखिल नेपाल राष्ट्रिय स्वतन्त्र विद्यार्थी युनियन", "version": "3.0"}
 
 @api_router.post("/seed-admin")
 async def seed_admin():
     """Create a default admin user for testing"""
     existing_admin = await db.users.find_one({"email": "admin@annfsu.org"})
     if existing_admin:
-        return {"message": "Admin already exists"}
+        # Update existing admin with username if not present
+        if not existing_admin.get("username"):
+            await db.users.update_one(
+                {"email": "admin@annfsu.org"},
+                {"$set": {"username": "admin"}}
+            )
+        return {"message": "Admin already exists", "username": "admin", "email": "admin@annfsu.org"}
     
     admin_user = {
+        "username": "admin",
         "email": "admin@annfsu.org",
         "password": hash_password("admin123"),
         "full_name": "Admin User",
@@ -958,19 +1175,17 @@ async def seed_admin():
     }
     
     await db.users.insert_one(admin_user)
-    return {"message": "Admin user created", "email": "admin@annfsu.org", "password": "admin123"}
+    return {"message": "Admin user created", "username": "admin", "email": "admin@annfsu.org", "password": "admin123"}
 
 @api_router.post("/seed-super-admin")
 async def seed_super_admin():
     """Create Super Admin - Gopal Nepal"""
-    existing = await db.users.find_one({"email": "gopalnepal@annfsu.org"})
+    existing = await db.users.find_one({"username": "gopalnepal"})
     if existing:
-        return {"message": "Super Admin already exists", "email": "gopalnepal@annfsu.org"}
-    
-    # Get photo from request or use empty
-    from fastapi import Request
+        return {"message": "Super Admin already exists", "username": "gopalnepal"}
     
     super_admin = {
+        "username": "gopalnepal",
         "email": "gopalnepal@annfsu.org",
         "password": hash_password("comrade123"),
         "full_name": "Gopal Nepal",
@@ -980,7 +1195,7 @@ async def seed_super_admin():
         "committee": "central",
         "position": "Super Administrator",
         "blood_group": "A+",
-        "photo": "",  # Will be updated with actual photo
+        "photo": "",
         "role": UserRole.SUPER_ADMIN,
         "status": UserStatus.APPROVED,
         "membership_id": "ANNFSU-00000",
@@ -993,9 +1208,9 @@ async def seed_super_admin():
     return {
         "message": "Super Admin created",
         "id": str(result.inserted_id),
+        "username": "gopalnepal",
         "email": "gopalnepal@annfsu.org",
-        "password": "comrade123",
-        "name": "Gopal Nepal"
+        "password": "comrade123"
     }
 
 # Include router
