@@ -202,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{ 
       user, 
       token, 
+      login,
       loginWithEmail, 
       loginWithOTP, 
       logout, 
