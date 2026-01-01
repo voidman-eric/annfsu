@@ -353,7 +353,8 @@ class ANNFSUAPITester:
         if response and response.status_code == 403:
             self.log_test("Unauthorized Content Creation", True, "Correctly rejected unauthorized access")
         else:
-            self.log_test("Unauthorized Content Creation", False, "Should have rejected unauthorized access")
+            error_msg = f"Expected 403, got {response.status_code if response else 'no response'}"
+            self.log_test("Unauthorized Content Creation", False, f"Should have rejected unauthorized access: {error_msg}")
         
         # Test creating member without token
         test_member = {
@@ -370,7 +371,8 @@ class ANNFSUAPITester:
         if response and response.status_code == 403:
             self.log_test("Unauthorized Member Creation", True, "Correctly rejected unauthorized access")
         else:
-            self.log_test("Unauthorized Member Creation", False, "Should have rejected unauthorized access")
+            error_msg = f"Expected 403, got {response.status_code if response else 'no response'}"
+            self.log_test("Unauthorized Member Creation", False, f"Should have rejected unauthorized access: {error_msg}")
     
     def run_all_tests(self):
         """Run all API tests"""
