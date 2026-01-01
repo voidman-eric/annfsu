@@ -83,6 +83,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const login = async (identifier: string, password: string) => {
+    try {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
+        identifier,
+        password,
+      });
+
+      const { access_token, user: userData } = response.data;
+      
+      await AsyncStorage.setItem('auth_token', access_token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(userData));
+      
+      setToken(access_token);
+      setUser(userData);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.detail || 'Login failed');
+    }
+  };
+
   const loginWithOTP = async (phone: string, otp: string) => {
     try {
       const response = await axios.post(`${API_URL}/api/auth/verify-otp`, {
