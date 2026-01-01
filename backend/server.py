@@ -422,6 +422,30 @@ async def create_member(user_data: UserCreate, admin: dict = Depends(require_adm
     
     return user_to_response(user_dict)
 
+@api_router.post("/membership/apply", response_model=UserResponse)
+async def apply_for_membership(current_user: dict = Depends(get_current_user)):
+    """Public user applies for membership - upgrades to Member role with Pending status"""
+    user_id = str(current_user["_id"])
+    
+    # Check if already a member
+    if current_user["role"] == UserRole.MEMBER:
+        if current_user["status"] == UserStatus.APPROVED:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already an approved member")
+        elif current_user["status"] == UserStatus.PENDING:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Application already submitted")
+    
+    # Upgrade from Public to Member (Pending)
+    update_dict = {
+        "role": UserRole.MEMBER,
+        "status": UserStatus.PENDING,
+        "updated_at": datetime.utcnow()
+    }
+    
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_dict})
+    updated_user = await db.users.find_one({"_id": ObjectId(user_id)})
+    
+    return user_to_response(updated_user)
+
 @api_router.get("/members", response_model=List[UserResponse])
 async def get_members(
     admin: dict = Depends(require_admin),
