@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
 } from 'react-native';
 import {
   DrawerContentScrollView,
@@ -14,6 +13,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Avatar from './Avatar';
 
 export default function CustomDrawerContent(props: DrawerContentComponentProps) {
   const { user, logout, isAdmin } = useAuth();
@@ -24,18 +24,33 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
     router.replace('/(auth)/login');
   };
 
+  const navigateToProfile = () => {
+    router.push('/(app)/profile');
+    props.navigation.closeDrawer();
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>ANNFSU</Text>
-          </View>
-        </View>
+        <TouchableOpacity onPress={navigateToProfile} activeOpacity={0.8}>
+          <Avatar
+            uri={user?.photo}
+            name={user?.full_name || 'User'}
+            size={80}
+          />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>अखिल नेपाल राष्ट्रिय</Text>
         <Text style={styles.headerSubtitle}>स्वतन्त्र विद्यार्थी युनियन</Text>
         {user && (
-          <Text style={styles.userName}>{user.full_name}</Text>
+          <TouchableOpacity onPress={navigateToProfile}>
+            <Text style={styles.userName}>{user.full_name}</Text>
+          </TouchableOpacity>
+        )}
+        {user?.membership_id && (
+          <View style={styles.membershipBadge}>
+            <Ionicons name="card" size={12} color="#DC143C" />
+            <Text style={styles.membershipText}>{user.membership_id}</Text>
+          </View>
         )}
       </View>
 
@@ -64,27 +79,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  logoContainer: {
-    marginBottom: 12,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#fff',
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoText: {
-    color: '#DC143C',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
   headerTitle: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+    marginTop: 12,
   },
   headerSubtitle: {
     color: '#fff',
@@ -97,6 +97,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
     fontWeight: '600',
+  },
+  membershipBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  membershipText: {
+    color: '#DC143C',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   drawerContent: {
     flex: 1,
