@@ -960,6 +960,44 @@ async def seed_admin():
     await db.users.insert_one(admin_user)
     return {"message": "Admin user created", "email": "admin@annfsu.org", "password": "admin123"}
 
+@api_router.post("/seed-super-admin")
+async def seed_super_admin():
+    """Create Super Admin - Gopal Nepal"""
+    existing = await db.users.find_one({"email": "gopalnepal@annfsu.org"})
+    if existing:
+        return {"message": "Super Admin already exists", "email": "gopalnepal@annfsu.org"}
+    
+    # Get photo from request or use empty
+    from fastapi import Request
+    
+    super_admin = {
+        "email": "gopalnepal@annfsu.org",
+        "password": hash_password("comrade123"),
+        "full_name": "Gopal Nepal",
+        "phone": "9800000000",
+        "address": "Kathmandu, Nepal",
+        "institution": "ANNFSU Central Office",
+        "committee": "central",
+        "position": "Super Administrator",
+        "blood_group": "A+",
+        "photo": "",  # Will be updated with actual photo
+        "role": UserRole.SUPER_ADMIN,
+        "status": UserStatus.APPROVED,
+        "membership_id": "ANNFSU-00000",
+        "issue_date": datetime.utcnow().isoformat(),
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    result = await db.users.insert_one(super_admin)
+    return {
+        "message": "Super Admin created",
+        "id": str(result.inserted_id),
+        "email": "gopalnepal@annfsu.org",
+        "password": "comrade123",
+        "name": "Gopal Nepal"
+    }
+
 # Include router
 app.include_router(api_router)
 
