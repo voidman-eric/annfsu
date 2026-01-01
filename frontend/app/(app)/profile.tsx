@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import QRCode from 'react-native-qrcode-svg';
+import MembershipCardView from '../../components/MembershipCardView';
 
 export default function ProfileScreen() {
   const { user } = useAuth();
@@ -15,10 +15,19 @@ export default function ProfileScreen() {
     );
   }
 
+  // Check if member is approved
+  const isApproved = user.status === 'approved';
+
   return (
     <ScrollView style={styles.container}>
-      {/* Membership Card */}
-      <View style={styles.membershipCard}>
+      {/* Membership Card - Only for Approved Members */}
+      {isApproved && user.membership_id ? (
+        <View style={styles.cardSection}>
+          <Text style={styles.sectionTitle}>तपाईंको सदस्यता कार्ड</Text>
+          <MembershipCardView user={user} />
+        </View>
+      ) : (
+        <View style={styles.pendingCard}>
         <View style={styles.cardHeader}>
           <View style={styles.cardLogo}>
             <Text style={styles.cardLogoText}>ANNFSU</Text>
