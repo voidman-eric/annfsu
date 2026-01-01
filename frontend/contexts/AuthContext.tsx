@@ -152,8 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user || !token) throw new Error('Not authenticated');
     
     try {
+      console.log('Starting photo update for user:', user.id);
+      
       // Upload to Supabase Storage
       const photoUrl = await uploadAvatar(user.id, base64Image, mimeType);
+      console.log('Photo uploaded to Supabase:', photoUrl);
       
       // Update backend
       const response = await axios.put(
@@ -162,12 +165,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
+      console.log('Backend updated with new photo URL');
+      
       const updatedUser = response.data;
       await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
       setUser(updatedUser);
+      
+      console.log('User state updated successfully');
     } catch (error: any) {
       console.error('Update photo error:', error);
-      throw new Error(error.response?.data?.detail || 'Failed to update photo');
+      throw new Error(error.response?.data?.detail || error.message || 'Failed to update photo');
     }
   };
 
