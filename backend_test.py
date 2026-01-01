@@ -53,7 +53,8 @@ class ANNFSUAPITester:
             
             return response
         except requests.exceptions.RequestException as e:
-            return None, str(e)
+            print(f"Request error for {method} {url}: {e}")
+            return None
     
     def get_auth_headers(self):
         """Get authorization headers with admin token"""
