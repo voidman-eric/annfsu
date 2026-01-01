@@ -57,7 +57,10 @@ export default function Avatar({
   const fontSize = size * 0.4;
   const editIconSize = size * 0.35;
 
-  const content = uri ? (
+  // Check if uri is valid (not null, undefined, or empty string)
+  const hasValidUri = uri && uri.trim().length > 0;
+
+  const content = hasValidUri ? (
     <Image
       source={{ uri }}
       style={[
